@@ -1,0 +1,24 @@
+# Never commit game data. ROMs, extracted scripts, translated scripts, and
+# glyph tables are all derived from copyrighted game content. Everything
+# per-game lives under work/ and stays local.
+work/
+
+*.gb
+*.gbc
+*.gba
+*.sfc
+*.smc
+*.gen
+*.bin
+*.iso
+*.trace
+*.gbromstate
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+build/
+*.dll
+*.exe
