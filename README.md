@@ -3,7 +3,7 @@
 > **Automated Japanese → English translation for 2D console games, on top of static recompilation.**
 > An LLM plays the game, the runtime captures every line of text with the exact context it appeared in, the script gets translated and reviewed, and English goes back in as a live overlay — no ROM patching, no pointer tables, no 8-character name limits.
 
-**Status: planning. No code yet.** This README is the plan and the progress tracker.
+**Status: P0 done, P1 next.** This README is the plan and the progress tracker.
 
 ---
 
@@ -26,7 +26,7 @@ Together those turn per-game archaeology into per-game *configuration*.
 
 | Piece | Where | What it gives us |
 |---|---|---|
-| Headless C ABI | `gb/pokemon/red/rom_bridge.c` | `create/step/read/read_range/write/set_buttons/framebuffer/snapshot/restore` over the recompiled engine |
+| Headless C ABI | `gbrecomp/runtime/src/rom_bridge.c` | `create/model/step/read/read_range/write/set_buttons/framebuffer/snapshot/restore` over the recompiled engine |
 | PyBoy-shaped shim | `gb/pokemon/bot/pyboy_shim.py` | that ABI as a drop-in PyBoy subset — existing GB tooling drives our engine unmodified |
 | Coverage-guided driving | `gb/pokemon/bot/` | an RL agent already walks Red across maps on the recompiled engine |
 | Control plane | [`recomp-harness-mcp`](https://github.com/sp00nznet/recomp-harness-mcp) | discover/build/recompile/run ~90 harnesses across 21 platforms |
@@ -143,7 +143,7 @@ Deliberately narrow. One console, one game, end to end, before any abstraction e
 
 | Phase | Deliverable | Done when |
 |---|---|---|
-| **P0** | Lift `rom_bridge.c` out of `pokemon/red/` into `gbrecomp` as a generic headless target | any GB harness builds `rom_headless.dll` without per-game edits |
+| **P0** ✅ | Lift `rom_bridge.c` out of `pokemon/red/` into `gbrecomp` as a generic headless target | any GB harness builds `rom_headless.dll` without per-game edits |
 | **P1** | GB vertical slice: capture → translate → inject, one JP game | English text renders in-game, scored against the official EN script |
 | **P2** | The explorer | unattended run discovers >90% of the strings a static dump finds |
 | **P3** | Second console (GBA, via `gbarecomp`) | the adapter seam gets designed *here*, not before — two implementations, then the interface |
@@ -191,7 +191,42 @@ Listed because they're the parts that decide whether this works, not the parts t
 
 | Date | Note |
 |---|---|
-| 2026-09-03 | Repo created. Surveyed the collection; plan written. Nothing built yet — next up is P0. |
+| 2026-09-03 | Repo created. Surveyed the collection; plan written. |
+| 2026-09-03 | **P0 done** (in `gb-recompiled`, committed locally, unpushed). Details below. |
+
+### P0 — a headless target for every harness
+
+Three things were forcing a hand-edit on any game directory that wanted to drive
+the engine from another process. All three lived in the generator rather than in
+the games, so they were fixed there:
+
+- **The bridge was per-game.** `rom_bridge.c` and `platform_headless.c` sat in
+  `pokemon/red/`. They wrap only `gbrt` primitives and carry no game logic, so
+  they moved to `gbrecomp/runtime/src/`. The bridge no longer includes the
+  generated `rom.h` — it declares `rom_init` / `rom_data` itself, overridable
+  with `-DGBROM_INIT` / `-DGBROM_DATA`.
+- **The hardware model was hardcoded.** A DMG cart branches on the post-bootrom
+  `A` register at `$0100` and renders white if booted in CGB mode — which is why
+  Red and Blue needed their `rom_main.c` restored after every single recompile.
+  New `gb_model_from_header()` reads the CGB flag at `$0143`; the generated main
+  and the bridge both use it. A NULL config still defaults to CGB, so nothing
+  regresses.
+- **The generated CMakeLists didn't link.** It omitted `hwtrace.c` (which
+  `ppu.c` calls) and `GB_RECOMPILED_DISPATCH` (the generated `rom.c` always
+  defines a strong `gb_dispatch`, so the weak fallback in `gbrt.c` is a
+  duplicate symbol under COFF/PE). Both are now emitted, together with the
+  `gbrt_headless` and `<prefix>_headless` targets.
+
+Also added `gbrom_model()` to the ABI — the capture layer has to know whether
+it's looking at one VRAM bank or two before it can read a tilemap.
+
+Verified end to end: recompiled the `gen_test_rom.py` output through the new
+emitter and built the generated CMakeLists with no edits beyond repointing
+`GBRT_DIR`. `tools/test_headless_abi.py` passes against the result — model
+matches the header, frames advance, framebuffer is 160×144 RGB,
+snapshot/restore round-trips, `read_range` agrees with per-byte reads. The
+snapshot blob is still 164956 bytes, so existing `.gbromstate` files stay
+valid.
 
 ---
 
