@@ -127,13 +127,78 @@ Replay the explorer's recorded input trace against the translated build. Screens
 
 ---
 
+## The corpus on hand
+
+The GBC library on `X:` / `Y:` (they mirror) holds **33 Japanese titles**, and
+every one carries a GoodTools `[T+Eng]` / `[T-Eng]` fan-translation tag. The
+plain Game Boy set has none, so this folder is the entire Japanese GB-family
+holding.
+
+Uniform and convenient: all 33 are **CGB**, almost all **MBC5+RAM+BAT**, 1–4 MB
+— the same cart shape as Pokémon Yellow, which `gbrecomp` already boots. Recomp
+risk on any of them is about as low as it gets.
+
+The catch: these are the **patched** ROMs, not clean Japanese dumps. That
+matters in two opposite directions.
+
+- A ROM tagged `T+Eng1.0` is *already English*. It cannot be pipeline input, and
+  without the clean JP original it cannot be the JP half of a paired corpus
+  either.
+- A ROM tagged `T+Eng0.05` is still ~95% Japanese. It works as input **today**,
+  and the sliver that *is* translated becomes a free correctness check on the
+  first strings the pipeline produces.
+
+So the low-percentage translations are the useful ones, and they are exactly the
+games that still need the work.
+
+---
+
 ## The eval harness (build this first)
 
 Pick a game that shipped in **both** Japanese and English. Translate the JP version with the pipeline, diff against the official English script.
 
-That is an objective quality score with zero human labelling, and it regression-tests every prompt and model change. Gen-1 Pokémon is the obvious first target: the JP and English versions both exist, the English script is ground truth, and Red already boots headless on this toolchain with an agent driving it.
+That is an objective quality score with zero human labelling, and it regression-tests every prompt and model change. Gen-2 Pokémon is the natural fit — Gold/Silver exist in both languages, and the toolchain already has `pokemon-gold` and `pokemon-silver` harnesses on the same MBC3+RTC infrastructure.
+
+**Blocked on one small sourcing task:** the JP Pokémon ROMs on hand are patched
+(`Pocket Monsters Kin/Gin [T-Eng2.70] / [T+Eng1.08]`), so a clean Japan dump is
+needed for the JP side. One file from a No-Intro Japan set. Not a design
+problem, just a missing input.
+
+A second, better-matched eval becomes available once clean dumps exist: the ~15
+titles here with *completed* fan translations are paired JP/EN data for exactly
+the task being automated — obscure JP games rendered by human fan translators.
+Closer to our output domain than an official first-party localisation is.
 
 Without this, "is the translation good?" is an argument. With it, it's a number.
+
+---
+
+## The P1 target
+
+**Game Boy Wars 3** (`GB WARS3`, CGB, MBC5+RAM+BAT, 1 MB, `[T+Eng0.05]`).
+
+Reasons, in the order that actually decided it:
+
+- **It needs the work.** Five percent translated after twenty-odd years.
+- **It is usable input today.** At 5%, the ROM on disk is effectively the
+  Japanese original — no clean dump to source before starting.
+- **It grades itself early.** That translated 5% is a human reference for the
+  first strings the pipeline emits, which is exactly when the glyph table and
+  textbox detection are most likely to be quietly wrong.
+- **The script is bounded and templated.** Strategy games are unit, terrain,
+  menu and briefing text — heavy on runtime-composed strings, which forces the
+  template-clustering problem early instead of letting it surface at P4. A
+  dialogue-driven RPG would defer that and be far harder to finish.
+- **Menu-heavy is the hard case for capture, in a good way.** Fixed-width status
+  boxes and unit panels stress tilemap extraction and overlay fitting more than
+  free-flowing dialogue does.
+- **It fits the collection.** Intelligent Systems, direct ancestor of Advance
+  Wars — already recompiled here on `gbarecomp`.
+
+Runner-up, if the goal is a showcase rather than a finish: **Meitantei Conan –
+Karakuri Jiin Satsujin Jiken** (CGB, MBC5, 1 MB, `[T+Eng0.1]`). A murder-mystery
+adventure is nearly pure dialogue, so it is the best possible demo of
+context-aware translation — and the largest, least bounded script of the 33.
 
 ---
 
@@ -144,7 +209,7 @@ Deliberately narrow. One console, one game, end to end, before any abstraction e
 | Phase | Deliverable | Done when |
 |---|---|---|
 | **P0** ✅ | Lift `rom_bridge.c` out of `pokemon/red/` into `gbrecomp` as a generic headless target | any GB harness builds `rom_headless.dll` without per-game edits |
-| **P1** | GB vertical slice: capture → translate → inject, one JP game | English text renders in-game, scored against the official EN script |
+| **P1** | GB vertical slice: capture → translate → inject, Game Boy Wars 3 | English text renders in-game, and the first strings match the existing 5% human translation |
 | **P2** | The explorer | unattended run discovers >90% of the strings a static dump finds |
 | **P3** | Second console (GBA, via `gbarecomp`) | the adapter seam gets designed *here*, not before — two implementations, then the interface |
 | **P4** | QA loop + optional ROM-patch export | overnight run produces a reviewed script and a flagged-issues list |
@@ -193,6 +258,7 @@ Listed because they're the parts that decide whether this works, not the parts t
 |---|---|
 | 2026-09-03 | Repo created. Surveyed the collection; plan written. |
 | 2026-09-03 | **P0 done** (in `gb-recompiled`, committed locally, unpushed). Details below. |
+| 2026-09-04 | Surveyed the `X:`/`Y:` ROM library — 33 Japanese GBC titles, all fan-translation-tagged, all CGB/MBC5. Target picked: **Game Boy Wars 3**. Eval harness needs one clean JP dump. |
 
 ### P0 — a headless target for every harness
 
